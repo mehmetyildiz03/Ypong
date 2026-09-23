@@ -45,35 +45,33 @@ interface TrailPoint {
   life: number;
 }
 
-const canvas = document.querySelector<HTMLCanvasElement>('#game');
-const topScoreEl = document.querySelector<HTMLElement>('#topScore');
-const bottomScoreEl = document.querySelector<HTMLElement>('#bottomScore');
-const menu = document.querySelector<HTMLElement>('#menu');
-const pauseOverlay = document.querySelector<HTMLElement>('#pauseOverlay');
-const resultOverlay = document.querySelector<HTMLElement>('#resultOverlay');
-const resultTitle = document.querySelector<HTMLElement>('#resultTitle');
-const resultScore = document.querySelector<HTMLElement>('#resultScore');
-const startButton = document.querySelector<HTMLButtonElement>('#startButton');
-const pauseButton = document.querySelector<HTMLButtonElement>('#pauseButton');
-const soundButton = document.querySelector<HTMLButtonElement>('#soundButton');
-const resumeButton = document.querySelector<HTMLButtonElement>('#resumeButton');
-const quitButton = document.querySelector<HTMLButtonElement>('#quitButton');
-const rematchButton = document.querySelector<HTMLButtonElement>('#rematchButton');
-const resultMenuButton = document.querySelector<HTMLButtonElement>('#resultMenuButton');
-const difficultyGroup = document.querySelector<HTMLElement>('#difficultyGroup');
-const controlHint = document.querySelector<HTMLElement>('#controlHint');
-
-if (
-  !canvas || !topScoreEl || !bottomScoreEl || !menu || !pauseOverlay || !resultOverlay ||
-  !resultTitle || !resultScore || !startButton || !pauseButton || !soundButton ||
-  !resumeButton || !quitButton || !rematchButton || !resultMenuButton ||
-  !difficultyGroup || !controlHint
-) {
-  throw new Error('YPONG arayüzü başlatılamadı.');
+function requireElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) throw new Error(`YPONG arayüz öğesi bulunamadı: ${selector}`);
+  return element;
 }
 
-const ctx = canvas.getContext('2d');
-if (!ctx) throw new Error('Canvas 2D desteği gerekli.');
+const canvas = requireElement<HTMLCanvasElement>('#game');
+const topScoreEl = requireElement<HTMLElement>('#topScore');
+const bottomScoreEl = requireElement<HTMLElement>('#bottomScore');
+const menu = requireElement<HTMLElement>('#menu');
+const pauseOverlay = requireElement<HTMLElement>('#pauseOverlay');
+const resultOverlay = requireElement<HTMLElement>('#resultOverlay');
+const resultTitle = requireElement<HTMLElement>('#resultTitle');
+const resultScore = requireElement<HTMLElement>('#resultScore');
+const startButton = requireElement<HTMLButtonElement>('#startButton');
+const pauseButton = requireElement<HTMLButtonElement>('#pauseButton');
+const soundButton = requireElement<HTMLButtonElement>('#soundButton');
+const resumeButton = requireElement<HTMLButtonElement>('#resumeButton');
+const quitButton = requireElement<HTMLButtonElement>('#quitButton');
+const rematchButton = requireElement<HTMLButtonElement>('#rematchButton');
+const resultMenuButton = requireElement<HTMLButtonElement>('#resultMenuButton');
+const difficultyGroup = requireElement<HTMLElement>('#difficultyGroup');
+const controlHint = requireElement<HTMLElement>('#controlHint');
+
+const context = canvas.getContext('2d');
+if (!context) throw new Error('Canvas 2D desteği gerekli.');
+const ctx: CanvasRenderingContext2D = context;
 
 let state: GameState = 'menu';
 let mode: Mode = 'cpu';
