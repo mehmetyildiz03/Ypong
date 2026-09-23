@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#071018" />
+    <meta name="description" content="YPONG — hızlı, modern ve mobil öncelikli Pong." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <title>YPONG</title>
+  </head>
+  <body>
+    <main id="app" class="app-shell">
+      <section class="game-stage" aria-label="YPONG oyun alanı">
+        <canvas id="game" width="720" height="1080" aria-label="YPONG oyun alanı"></canvas>
+
+        <header class="hud" aria-live="polite">
+          <div class="score score-top"><span id="topScore">0</span></div>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="Oyunu duraklat">Ⅱ</button>
+          <button id="soundButton" class="icon-button" type="button" aria-label="Sesi kapat">♪</button>
+          <div class="score score-bottom"><span id="bottomScore">0</span></div>
+        </header>
+
+        <div id="menu" class="overlay overlay-visible">
+          <div class="panel">
+            <div class="eyebrow">ARCADE / TOUCH</div>
+            <h1>Y<span>PONG</span></h1>
+            <p class="tagline">Ritmi yakala. Açıyı değiştir. Rakibini çöz.</p>
+
+            <div class="control-group" aria-label="Oyun modu">
+              <button class="choice active" type="button" data-mode="cpu">CPU</button>
+              <button class="choice" type="button" data-mode="local">2 OYUNCU</button>
+            </div>
+
+            <div id="difficultyGroup" class="control-group" aria-label="Zorluk">
+              <button class="choice" type="button" data-difficulty="easy">RAHAT</button>
+              <button class="choice active" type="button" data-difficulty="normal">NORMAL</button>
+              <button class="choice" type="button" data-difficulty="hard">ZOR</button>
+            </div>
+
+            <button id="startButton" class="primary-button" type="button">BAŞLA</button>
+            <p id="controlHint" class="hint">Dokun/sürükle veya A–D ile raketi hareket ettir.</p>
+          </div>
+        </div>
+
+        <div id="pauseOverlay" class="overlay" aria-hidden="true">
+          <div class="panel compact">
+            <div class="eyebrow">DURAKLATILDI</div>
+            <h2>Devam etmeye hazır mısın?</h2>
+            <button id="resumeButton" class="primary-button" type="button">DEVAM</button>
+            <button id="quitButton" class="secondary-button" type="button">ANA MENÜ</button>
+          </div>
+        </div>
+
+        <div id="resultOverlay" class="overlay" aria-hidden="true">
+          <div class="panel compact">
+            <div class="eyebrow">MAÇ BİTTİ</div>
+            <h2 id="resultTitle">Kazandın</h2>
+            <p id="resultScore" class="result-score">7 — 4</p>
+            <button id="rematchButton" class="primary-button" type="button">RÖVANŞ</button>
+            <button id="resultMenuButton" class="secondary-button" type="button">ANA MENÜ</button>
+          </div>
+        </div>
+
+        <div class="rotate-note">En iyi deneyim için telefonu dikey kullan.</div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

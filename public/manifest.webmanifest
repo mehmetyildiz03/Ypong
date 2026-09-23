@@ -1,0 +1,19 @@
+{
+  "name": "YPONG",
+  "short_name": "YPONG",
+  "description": "Modern, mobil öncelikli Pong oyunu.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#04090d",
+  "theme_color": "#071018",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
