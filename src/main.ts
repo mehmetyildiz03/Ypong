@@ -905,7 +905,7 @@ function drawPaddle(paddle: Paddle, isBottom: boolean): void {
   roundedRect(paddle.x + 14, paddle.y + 4, paddle.width - 28, 3, 2);
   ctx.fill();
 
-  const sweetWidth = paddle.width * PERFECT_ZONE_RATIO * 2;
+  const sweetWidth = paddle.width * PERFECT_ZONE_RATIO;
   ctx.fillStyle = 'rgba(255,255,255,.18)';
   roundedRect(
     paddle.x + paddle.width / 2 - sweetWidth / 2,
