@@ -239,6 +239,8 @@ function rescaleBallVelocity(targetSpeed: number): void {
 }
 
 function resetBall(direction?: 'top' | 'bottom'): void {
+  if (boostHitsRemaining === 0) boostedFlight = false;
+
   ball.x = WORLD_W / 2;
   ball.y = WORLD_H / 2;
   ball.vx = 0;
@@ -807,6 +809,21 @@ function drawPowerNode(): void {
   ctx.restore();
 }
 
+function drawBoostCounter(): void {
+  if (!boostedFlight) return;
+
+  const label = boostHitsRemaining > 0 ? `BOOST ×${boostHitsRemaining}` : 'BOOST';
+  ctx.save();
+  ctx.font = '900 11px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255, 164, 92, .9)';
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = 'rgba(255, 120, 56, .45)';
+  ctx.fillText(label, WORLD_W / 2, WORLD_H / 2 - 118);
+  ctx.restore();
+}
+
 function drawPowerToast(): void {
   if (!powerToast) return;
 
@@ -900,6 +917,7 @@ function draw(): void {
   drawPaddle(paddleTop, false);
   drawPaddle(paddleBottom, true);
   drawBall();
+  drawBoostCounter();
   drawPowerToast();
 
   ctx.restore();
