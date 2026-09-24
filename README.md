@@ -59,6 +59,7 @@ npm run build
 - Güç noktaları topun ve bumper'ın güvenli mesafesinde oluşturulur.
 - **WIDE:** Son vuran oyuncunun raketini 6.5 saniye boyunca %35 büyütür.
 - **SHRINK:** Son vuran oyuncunun rakibini 6.5 saniye boyunca %30 küçültür.
-- **SLOW:** Topu 4.5 saniye boyunca %28 yavaşlatır ve süre bitince nominal hıza geri döndürür.
+- **BOOST:** Topu anında %28 hızlandırır. Sonraki 3 raket teması da hızlandırılmış çıkış üretir; üçüncü güçlü dönüşten sonra bir sonraki paddle temasında normal ralli hızına döner.
 - Topa son dokunan oyuncu takip edilir; güç puan/şans yoluyla değil, topu düğüme gerçekten isabet ettirerek kazanılır.
 - Güç noktaları parlak ve etiketli; nötr bumper ise arena geometrisinin mat bir parçası olarak çizilir.
+- BOOST aktifken top turuncu tonuna geçer ve kalan güçlü vuruş sayısı ekranda gösterilir.
