@@ -1,7 +1,7 @@
 import './styles.css';
 
 const WORLD_W = 720;
-const WORLD_H = 1080;
+let WORLD_H = 1080;
 const WIN_SCORE = 7;
 const FIXED_STEP = 1 / 120;
 
@@ -54,6 +54,8 @@ function requireElement<T extends Element>(selector: string): T {
 const canvas = requireElement<HTMLCanvasElement>('#game');
 const topScoreEl = requireElement<HTMLElement>('#topScore');
 const bottomScoreEl = requireElement<HTMLElement>('#bottomScore');
+const topLabelEl = requireElement<HTMLElement>('#topLabel');
+const bottomLabelEl = requireElement<HTMLElement>('#bottomLabel');
 const menu = requireElement<HTMLElement>('#menu');
 const pauseOverlay = requireElement<HTMLElement>('#pauseOverlay');
 const resultOverlay = requireElement<HTMLElement>('#resultOverlay');
@@ -84,6 +86,8 @@ let accumulator = 0;
 let shake = 0;
 let aiClock = 0;
 let aiAim = WORLD_W / 2;
+let aiShotError = 0;
+let aiWasIncoming = false;
 let audioContext: AudioContext | null = null;
 let bottomPointer: number | null = null;
 let topPointer: number | null = null;
@@ -127,7 +131,30 @@ const difficultyTuning = {
   hard: { maxSpeed: 625, reaction: .045, error: 15 },
 } satisfies Record<Difficulty, { maxSpeed: number; reaction: number; error: number }>;
 
+function layoutPaddles(): void {
+  const topInset = clamp(WORLD_H * .115, 108, 148);
+  const bottomInset = clamp(WORLD_H * .085, 84, 116);
+  paddleTop.y = topInset;
+  paddleBottom.y = WORLD_H - bottomInset - paddleBottom.height;
+}
+
 function resizeCanvas(): void {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  const previousHeight = WORLD_H;
+  const nextHeight = WORLD_W * (rect.height / rect.width);
+  const scaleY = nextHeight / previousHeight;
+  WORLD_H = nextHeight;
+
+  if (state === 'playing' || state === 'paused') {
+    ball.y *= scaleY;
+  } else {
+    ball.y = WORLD_H / 2;
+  }
+
+  layoutPaddles();
+
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(WORLD_W * dpr);
   canvas.height = Math.round(WORLD_H * dpr);
@@ -146,6 +173,8 @@ function setOverlay(element: HTMLElement, visible: boolean): void {
 function syncHud(): void {
   topScoreEl.textContent = String(topScore);
   bottomScoreEl.textContent = String(bottomScore);
+  topLabelEl.textContent = mode === 'cpu' ? 'CPU' : 'ÜST';
+  bottomLabelEl.textContent = mode === 'cpu' ? 'SEN' : 'ALT';
 }
 
 function centerPaddles(): void {
@@ -155,6 +184,7 @@ function centerPaddles(): void {
   paddleBottom.targetX = WORLD_W / 2;
   paddleTop.vx = 0;
   paddleBottom.vx = 0;
+  layoutPaddles();
 }
 
 function resetBall(direction?: 'top' | 'bottom'): void {
@@ -210,7 +240,7 @@ function finishMatch(): void {
   state = 'gameover';
   const bottomWon = bottomScore > topScore;
   resultTitle.textContent = bottomWon
-    ? 'Alt oyuncu kazandı'
+    ? mode === 'cpu' ? 'Kazandın' : 'Alt oyuncu kazandı'
     : mode === 'cpu' ? 'CPU kazandı' : 'Üst oyuncu kazandı';
   resultScore.textContent = `${bottomScore} — ${topScore}`;
   setOverlay(resultOverlay, true);
@@ -233,10 +263,19 @@ function scorePoint(side: 'top' | 'bottom'): void {
   resetBall(side === 'top' ? 'bottom' : 'top');
 }
 
-function movePaddle(paddle: Paddle, targetCenter: number, maxSpeed: number, dt: number): void {
+function movePaddle(
+  paddle: Paddle,
+  targetCenter: number,
+  maxSpeed: number,
+  dt: number,
+  response = 12,
+): void {
+  const minCenter = 22 + paddle.width / 2;
+  const maxCenter = WORLD_W - 22 - paddle.width / 2;
+  const safeTarget = clamp(targetCenter, minCenter, maxCenter);
   const currentCenter = paddle.x + paddle.width / 2;
-  const delta = targetCenter - currentCenter;
-  const desired = clamp(delta * 12, -maxSpeed, maxSpeed);
+  const delta = safeTarget - currentCenter;
+  const desired = clamp(delta * response, -maxSpeed, maxSpeed);
   const previousX = paddle.x;
   paddle.x += desired * dt;
   paddle.x = clamp(paddle.x, 22, WORLD_W - 22 - paddle.width);
@@ -269,8 +308,8 @@ function updateHumanControls(dt: number): void {
     }
   }
 
-  movePaddle(paddleBottom, paddleBottom.targetX, 980, dt);
-  if (mode === 'local') movePaddle(paddleTop, paddleTop.targetX, 980, dt);
+  movePaddle(paddleBottom, paddleBottom.targetX, 1800, dt, 22);
+  if (mode === 'local') movePaddle(paddleTop, paddleTop.targetX, 1800, dt, 22);
 }
 
 function predictBallXAt(targetY: number): number {
@@ -294,15 +333,19 @@ function predictBallXAt(targetY: number): number {
 
 function updateAI(dt: number): void {
   const tuning = difficultyTuning[difficulty];
+  const incoming = ball.active && ball.vy < 0;
+
+  if (incoming && !aiWasIncoming) {
+    aiShotError = (Math.random() * 2 - 1) * tuning.error;
+  }
+  aiWasIncoming = incoming;
   aiClock -= dt;
 
   if (aiClock <= 0) {
     aiClock = tuning.reaction;
-    const incoming = ball.active && ball.vy < 0;
     const predicted = incoming ? predictBallXAt(paddleTop.y + paddleTop.height) : WORLD_W / 2;
-    const error = (Math.random() * 2 - 1) * tuning.error;
     aiAim = clamp(
-      predicted + error,
+      predicted + (incoming ? aiShotError : 0),
       22 + paddleTop.width / 2,
       WORLD_W - 22 - paddleTop.width / 2,
     );
@@ -328,9 +371,11 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
   const angle = offset * maxAngle;
 
   ball.speed = Math.min(ball.speed * 1.035 + 7, 1030);
-  ball.vx = Math.sin(angle) * ball.speed + paddle.vx * .15;
-  const remaining = Math.max(160, Math.sqrt(Math.max(0, ball.speed * ball.speed - ball.vx * ball.vx)));
-  ball.vy = remaining * (fromTop ? -1 : 1);
+  const maxHorizontal = Math.sin(maxAngle) * ball.speed;
+  const influencedVx = Math.sin(angle) * ball.speed + paddle.vx * .15;
+  ball.vx = clamp(influencedVx, -maxHorizontal, maxHorizontal);
+  const verticalSpeed = Math.sqrt(Math.max(0, ball.speed * ball.speed - ball.vx * ball.vx));
+  ball.vy = verticalSpeed * (fromTop ? -1 : 1);
   ball.y = fromTop
     ? paddle.y - ball.radius - .5
     : paddle.y + paddle.height + ball.radius + .5;
@@ -558,18 +603,30 @@ function setPointerTarget(event: PointerEvent): void {
 
   if (mode === 'cpu') {
     bottomPointer = event.pointerId;
-    paddleBottom.targetX = x;
+    paddleBottom.targetX = clamp(
+      x,
+      22 + paddleBottom.width / 2,
+      WORLD_W - 22 - paddleBottom.width / 2,
+    );
     return;
   }
 
   if (normalizedY < .5) {
     if (topPointer === null || topPointer === event.pointerId) {
       topPointer = event.pointerId;
-      paddleTop.targetX = x;
+      paddleTop.targetX = clamp(
+        x,
+        22 + paddleTop.width / 2,
+        WORLD_W - 22 - paddleTop.width / 2,
+      );
     }
   } else if (bottomPointer === null || bottomPointer === event.pointerId) {
     bottomPointer = event.pointerId;
-    paddleBottom.targetX = x;
+    paddleBottom.targetX = clamp(
+      x,
+      22 + paddleBottom.width / 2,
+      WORLD_W - 22 - paddleBottom.width / 2,
+    );
   }
 }
 
@@ -623,11 +680,29 @@ canvas.addEventListener('pointerdown', (event) => {
 canvas.addEventListener('pointermove', (event) => {
   if (state !== 'playing') return;
   if (mode === 'cpu') {
-    if (bottomPointer === event.pointerId) paddleBottom.targetX = pointerToWorldX(event);
+    if (bottomPointer === event.pointerId) {
+      paddleBottom.targetX = clamp(
+        pointerToWorldX(event),
+        22 + paddleBottom.width / 2,
+        WORLD_W - 22 - paddleBottom.width / 2,
+      );
+    }
     return;
   }
-  if (topPointer === event.pointerId) paddleTop.targetX = pointerToWorldX(event);
-  if (bottomPointer === event.pointerId) paddleBottom.targetX = pointerToWorldX(event);
+  if (topPointer === event.pointerId) {
+    paddleTop.targetX = clamp(
+      pointerToWorldX(event),
+      22 + paddleTop.width / 2,
+      WORLD_W - 22 - paddleTop.width / 2,
+    );
+  }
+  if (bottomPointer === event.pointerId) {
+    paddleBottom.targetX = clamp(
+      pointerToWorldX(event),
+      22 + paddleBottom.width / 2,
+      WORLD_W - 22 - paddleBottom.width / 2,
+    );
+  }
 });
 
 function releasePointer(event: PointerEvent): void {
@@ -657,6 +732,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => 
     mode = button.dataset.mode === 'local' ? 'local' : 'cpu';
     document.querySelectorAll('[data-mode]').forEach((item) => item.classList.toggle('active', item === button));
     difficultyGroup.style.display = mode === 'cpu' ? 'grid' : 'none';
+    syncHud();
     controlHint.textContent = mode === 'cpu'
       ? 'Dokun/sürükle veya A–D ile alt raketi hareket ettir.'
       : 'Alt: dokun/sürükle veya A–D · Üst: dokun/sürükle veya ← →';
