@@ -18,6 +18,9 @@ const BASE_PADDLE_WIDTH = 164;
 const WIDE_SCALE = 1.35;
 const SHRINK_SCALE = .7;
 const BOOST_SCALE = 1.28;
+const PERFECT_ZONE_RATIO = .18;
+const PERFECT_SPEED_SCALE = 1.06;
+const PERFECT_STEER_ANGLE = 14 * Math.PI / 180;
 
 type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
 type Mode = 'cpu' | 'local';
@@ -124,6 +127,8 @@ let powerNode: PowerUpNode | null = null;
 let powerSpawnTimer = nextPowerSpawnDelay();
 let boostHitsRemaining = 0;
 let boostedFlight = false;
+let perfectFlight = false;
+let perfectToast: PowerToast | null = null;
 let powerToast: PowerToast | null = null;
 
 const effectTimers: EffectTimers = {
@@ -240,6 +245,8 @@ function rescaleBallVelocity(targetSpeed: number): void {
 
 function resetBall(direction?: 'top' | 'bottom'): void {
   if (boostHitsRemaining === 0) boostedFlight = false;
+  perfectFlight = false;
+  perfectToast = null;
 
   ball.x = WORLD_W / 2;
   ball.y = WORLD_H / 2;
@@ -265,6 +272,8 @@ function resetArenaSystems(): void {
   effectTimers.bottomShrink = 0;
   boostHitsRemaining = 0;
   boostedFlight = false;
+  perfectFlight = false;
+  perfectToast = null;
   powerToast = null;
   powerNode = null;
   powerSpawnTimer = nextPowerSpawnDelay();
@@ -330,6 +339,11 @@ function updateArenaSystems(dt: number): void {
 
   setPaddleWidth(paddleTop, desiredPaddleWidth('top'), dt);
   setPaddleWidth(paddleBottom, desiredPaddleWidth('bottom'), dt);
+
+  if (perfectToast) {
+    perfectToast.life -= dt;
+    if (perfectToast.life <= 0) perfectToast = null;
+  }
 
   if (powerToast) {
     powerToast.life -= dt;
@@ -529,18 +543,31 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
   const paddleCenter = paddle.x + paddle.width / 2;
   const offset = clamp((ball.x - paddleCenter) / (paddle.width / 2), -1, 1);
   const maxAngle = 62 * Math.PI / 180;
-  const angle = offset * maxAngle;
+  const isPerfect = Math.abs(offset) <= PERFECT_ZONE_RATIO;
+  const steer = clamp(paddle.vx / 1800, -1, 1);
+  const angle = isPerfect ? steer * PERFECT_STEER_ANGLE : offset * maxAngle;
 
   lastHitBy = fromTop ? 'bottom' : 'top';
   ball.speed = Math.min(ball.speed * 1.035 + 7, 1030);
 
   const useBoost = boostHitsRemaining > 0;
-  const effectiveSpeed = ball.speed * (useBoost ? BOOST_SCALE : 1);
-  const maxHorizontal = Math.sin(maxAngle) * effectiveSpeed;
-  const influencedVx = Math.sin(angle) * effectiveSpeed + paddle.vx * .15;
+  const perfectScale = isPerfect ? PERFECT_SPEED_SCALE : 1;
+  const effectiveSpeed = ball.speed * (useBoost ? BOOST_SCALE : 1) * perfectScale;
+  const maxHorizontal = Math.sin(isPerfect ? PERFECT_STEER_ANGLE : maxAngle) * effectiveSpeed;
+  const paddleInfluence = isPerfect ? 0 : paddle.vx * .15;
+  const influencedVx = Math.sin(angle) * effectiveSpeed + paddleInfluence;
   ball.vx = clamp(influencedVx, -maxHorizontal, maxHorizontal);
   const verticalSpeed = Math.sqrt(Math.max(0, effectiveSpeed * effectiveSpeed - ball.vx * ball.vx));
   ball.vy = verticalSpeed * (fromTop ? -1 : 1);
+
+  perfectFlight = isPerfect;
+  if (isPerfect) {
+    const side: PlayerSide = fromTop ? 'bottom' : 'top';
+    perfectToast = { text: 'PERFECT', side, life: .85 };
+    shake = Math.max(shake, 6);
+    burst(ball.x, ball.y, 18, .9);
+    tone(980, .055, 'triangle', .035);
+  }
 
   if (useBoost) {
     boostHitsRemaining -= 1;
@@ -552,9 +579,11 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
     ? paddle.y - ball.radius - .5
     : paddle.y + paddle.height + ball.radius + .5;
 
-  shake = Math.min(8, 3 + ball.speed / 230);
-  burst(ball.x, ball.y, 12, .8);
-  tone(220 + Math.abs(offset) * 220 + ball.speed * .18, .045, 'square', .025);
+  shake = Math.max(shake, Math.min(8, 3 + ball.speed / 230));
+  burst(ball.x, ball.y, isPerfect ? 8 : 12, .8);
+  if (!isPerfect) {
+    tone(220 + Math.abs(offset) * 220 + ball.speed * .18, .045, 'square', .025);
+  }
   return true;
 }
 
@@ -824,6 +853,24 @@ function drawBoostCounter(): void {
   ctx.restore();
 }
 
+function drawPerfectToast(): void {
+  if (!perfectToast) return;
+
+  const y = perfectToast.side === 'top' ? paddleTop.y + 70 : paddleBottom.y - 50;
+  const alpha = clamp(perfectToast.life / .22, 0, 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = '950 14px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(238, 253, 255, .96)';
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = 'rgba(112, 238, 255, .72)';
+  ctx.fillText(perfectToast.text, WORLD_W / 2, y);
+  ctx.restore();
+}
+
 function drawPowerToast(): void {
   if (!powerToast) return;
 
@@ -857,6 +904,17 @@ function drawPaddle(paddle: Paddle, isBottom: boolean): void {
   ctx.fillStyle = 'rgba(255,255,255,.58)';
   roundedRect(paddle.x + 14, paddle.y + 4, paddle.width - 28, 3, 2);
   ctx.fill();
+
+  const sweetWidth = paddle.width * PERFECT_ZONE_RATIO * 2;
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  roundedRect(
+    paddle.x + paddle.width / 2 - sweetWidth / 2,
+    paddle.y - 3,
+    sweetWidth,
+    paddle.height + 6,
+    8,
+  );
+  ctx.fill();
   ctx.restore();
 }
 
@@ -864,7 +922,7 @@ function drawBall(): void {
   for (let i = trail.length - 1; i >= 0; i -= 1) {
     const point = trail[i];
     ctx.globalAlpha = Math.max(0, point.life) * .25;
-    ctx.fillStyle = boostedFlight ? '#ff9852' : '#83f1ff';
+    ctx.fillStyle = boostedFlight ? '#ff9852' : perfectFlight ? '#d9fbff' : '#83f1ff';
     ctx.beginPath();
     ctx.arc(point.x, point.y, ball.radius * (.35 + point.life * .5), 0, Math.PI * 2);
     ctx.fill();
@@ -873,8 +931,12 @@ function drawBall(): void {
   ctx.globalAlpha = 1;
   ctx.save();
   ctx.shadowBlur = 30;
-  ctx.shadowColor = boostedFlight ? 'rgba(255, 120, 56, .78)' : 'rgba(120, 239, 255, .75)';
-  ctx.fillStyle = boostedFlight ? '#fff0e3' : '#f5fdff';
+  ctx.shadowColor = boostedFlight
+    ? 'rgba(255, 120, 56, .78)'
+    : perfectFlight
+      ? 'rgba(210, 251, 255, .95)'
+      : 'rgba(120, 239, 255, .75)';
+  ctx.fillStyle = boostedFlight ? '#fff0e3' : perfectFlight ? '#ffffff' : '#f5fdff';
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
   ctx.fill();
@@ -918,6 +980,7 @@ function draw(): void {
   drawPaddle(paddleBottom, true);
   drawBall();
   drawBoostCounter();
+  drawPerfectToast();
   drawPowerToast();
 
   ctx.restore();
