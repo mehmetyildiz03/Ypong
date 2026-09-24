@@ -128,6 +128,8 @@ let powerSpawnTimer = nextPowerSpawnDelay();
 let boostHitsRemaining = 0;
 let boostedFlight = false;
 let perfectFlight = false;
+let perfectPulseTop = 0;
+let perfectPulseBottom = 0;
 let powerToast: PowerToast | null = null;
 
 const effectTimers: EffectTimers = {
@@ -271,6 +273,8 @@ function resetArenaSystems(): void {
   boostHitsRemaining = 0;
   boostedFlight = false;
   perfectFlight = false;
+  perfectPulseTop = 0;
+  perfectPulseBottom = 0;
   powerToast = null;
   powerNode = null;
   powerSpawnTimer = nextPowerSpawnDelay();
@@ -336,6 +340,9 @@ function updateArenaSystems(dt: number): void {
 
   setPaddleWidth(paddleTop, desiredPaddleWidth('top'), dt);
   setPaddleWidth(paddleBottom, desiredPaddleWidth('bottom'), dt);
+
+  perfectPulseTop = Math.max(0, perfectPulseTop - dt);
+  perfectPulseBottom = Math.max(0, perfectPulseBottom - dt);
 
   if (powerToast) {
     powerToast.life -= dt;
@@ -554,6 +561,8 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
 
   perfectFlight = isPerfect;
   if (isPerfect) {
+    if (fromTop) perfectPulseBottom = .24;
+    else perfectPulseTop = .24;
     shake = Math.max(shake, 6);
     burst(ball.x, ball.y, 18, .9);
     tone(980, .055, 'triangle', .035);
@@ -879,8 +888,12 @@ function drawPaddle(paddle: Paddle, isBottom: boolean): void {
 
   const sweetWidth = Math.min(PERFECT_ZONE_WIDTH, paddle.width - 12);
   const sweetX = paddle.x + paddle.width / 2 - sweetWidth / 2;
+  const pulse = isBottom ? perfectPulseBottom : perfectPulseTop;
+  const pulseStrength = clamp(pulse / .24, 0, 1);
 
-  ctx.fillStyle = 'rgba(255,255,255,.16)';
+  ctx.shadowBlur = pulseStrength * 24;
+  ctx.shadowColor = 'rgba(220, 252, 255, .9)';
+  ctx.fillStyle = `rgba(255,255,255,${.16 + pulseStrength * .34})`;
   roundedRect(
     sweetX,
     paddle.y - 2,
@@ -890,7 +903,8 @@ function drawPaddle(paddle: Paddle, isBottom: boolean): void {
   );
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255,255,255,.34)';
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = `rgba(255,255,255,${.34 + pulseStrength * .36})`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(sweetX, paddle.y + 4);
