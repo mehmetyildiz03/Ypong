@@ -2,7 +2,7 @@
 
 YPONG, klasik Pong fikrini telefon ve tablet için yeniden yorumlayan, dikey oyun alanına sahip modern bir arcade oyunudur.
 
-## v0.1 hedefi
+## v0.2 temeli
 
 - Üst/alt yatay raket düzeni
 - Dokunma ve sürükleme kontrolü
@@ -39,3 +39,13 @@ npm run build
 - `Esc` veya boşluk: duraklat
 
 İlk kazanan 7 sayıya ulaşır.
+
+
+## v0.2 düzeltmeleri
+
+- YPONG service worker cache'i yalnızca YPONG cache'lerini temizler.
+- Oyun alanı telefonun kullanılabilir yüksekliğine göre dinamik fizik dünyası kullanır.
+- Skor HUD'ı oyuncuları CPU/SEN veya ÜST/ALT olarak açıkça gösterir.
+- Dokunmatik raket tepkisi hızlandırıldı.
+- Vuruş sonrası top hızı ve maksimum çıkış açısı normalize edildi.
+- CPU hata payı her gelen top için tutarlı hale getirildi.
