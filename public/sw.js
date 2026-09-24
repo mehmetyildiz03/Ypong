@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'ypong-';
-const CACHE = 'ypong-v0.4-runtime';
+const CACHE = 'ypong-v0.4.1-runtime';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
