@@ -63,3 +63,15 @@ npm run build
 - Topa son dokunan oyuncu takip edilir; güç puan/şans yoluyla değil, topu düğüme gerçekten isabet ettirerek kazanılır.
 - Güç noktaları parlak ve etiketli; nötr bumper ise arena geometrisinin mat bir parçası olarak çizilir.
 - BOOST aktifken top turuncu tonuna geçer ve kalan güçlü vuruş sayısı ekranda gösterilir.
+
+
+## v0.4 — Perfect Hit
+
+- Her raketin merkezinde dar bir sweet spot bulunur.
+- Top merkez bölgeye temiz isabet ettiğinde **PERFECT** vuruş oluşur.
+- Perfect Hit normal vuruştan %6 daha hızlıdır, ancak aşırı yan açı üretmez.
+- Perfect Hit sırasında çıkış açısı en fazla yaklaşık 14° olur.
+- Oyuncu raketi temas anında sağa/sola hareket ettirerek bu dar açı içinde topu yönlendirebilir.
+- Sweet spot görsel olarak raketin merkezinde hafifçe işaretlenir.
+- Perfect Hit özel ses, parçacık ve kısa görsel geri bildirim üretir.
+- BOOST ve Perfect Hit aynı vuruşta birlikte çalışabilir; BOOST turuncu top görünümü önceliklidir.
