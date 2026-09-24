@@ -67,11 +67,11 @@ npm run build
 
 ## v0.4 — Perfect Hit
 
-- Her raketin merkezinde dar bir sweet spot bulunur.
+- Her raketin merkezinde sabit 30 birim genişliğinde bir sweet spot bulunur; WIDE/SHRINK bu alanın fiziksel genişliğini değiştirmez.
 - Top merkez bölgeye temiz isabet ettiğinde **PERFECT** vuruş oluşur.
 - Perfect Hit normal vuruştan %6 daha hızlıdır, ancak aşırı yan açı üretmez.
 - Perfect Hit sırasında çıkış açısı en fazla yaklaşık 14° olur.
 - Oyuncu raketi temas anında sağa/sola hareket ettirerek bu dar açı içinde topu yönlendirebilir.
-- Sweet spot görsel olarak raketin merkezinde hafifçe işaretlenir.
-- Perfect Hit özel ses, parçacık ve kısa görsel geri bildirim üretir.
+- Sweet spot raketin ortasında ayrı bir merkez parçası olarak görünür; başarılı temas anında bu parça kısa süre parlar.
+- Perfect Hit özel ses, parçacık ve merkez-parça parlaması üretir; oyun alanında `PERFECT` yazısı gösterilmez.
 - BOOST ve Perfect Hit aynı vuruşta birlikte çalışabilir; BOOST turuncu top görünümü önceliklidir.
