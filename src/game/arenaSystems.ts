@@ -1,5 +1,5 @@
 export type PlayerSide = 'top' | 'bottom';
-export type PowerUpType = 'wide' | 'shrink' | 'slow';
+export type PowerUpType = 'wide' | 'shrink' | 'boost';
 
 export interface CirclePoint {
   x: number;
@@ -25,7 +25,7 @@ export interface SpawnContext {
   bumper: Bumper | null;
 }
 
-const POWER_TYPES: readonly PowerUpType[] = ['wide', 'shrink', 'slow'];
+const POWER_TYPES: readonly PowerUpType[] = ['wide', 'shrink', 'boost'];
 
 function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
