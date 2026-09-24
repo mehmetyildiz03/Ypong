@@ -41,12 +41,22 @@ export function nextPowerSpawnDelay(): number {
 
 export function createBumper(worldWidth: number, worldHeight: number): Bumper {
   const radius = 31;
-  const centerY = worldHeight / 2;
+  const center = { x: worldWidth / 2, y: worldHeight / 2 };
   const verticalSpread = Math.min(190, worldHeight * .13);
 
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const candidate = {
+      x: randomRange(150, worldWidth - 150),
+      y: center.y + randomRange(-verticalSpread, verticalSpread),
+    };
+
+    if (distance(candidate, center) < 125) continue;
+    return { ...candidate, radius };
+  }
+
   return {
-    x: randomRange(150, worldWidth - 150),
-    y: centerY + randomRange(-verticalSpread, verticalSpread),
+    x: worldWidth / 2 + 150,
+    y: center.y,
     radius,
   };
 }
