@@ -1,9 +1,23 @@
 import './styles.css';
+import {
+  circlesOverlap,
+  createBumper,
+  createPowerUpNode,
+  nextPowerSpawnDelay,
+  type Bumper,
+  type PlayerSide,
+  type PowerUpNode,
+  type PowerUpType,
+} from './game/arenaSystems';
 
 const WORLD_W = 720;
 let WORLD_H = 1080;
 const WIN_SCORE = 7;
 const FIXED_STEP = 1 / 120;
+const BASE_PADDLE_WIDTH = 164;
+const WIDE_SCALE = 1.35;
+const SHRINK_SCALE = .7;
+const SLOW_SCALE = .72;
 
 type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
 type Mode = 'cpu' | 'local';
@@ -42,6 +56,19 @@ interface Particle {
 interface TrailPoint {
   x: number;
   y: number;
+  life: number;
+}
+
+interface EffectTimers {
+  topWide: number;
+  bottomWide: number;
+  topShrink: number;
+  bottomShrink: number;
+}
+
+interface PowerToast {
+  text: string;
+  side: PlayerSide;
   life: number;
 }
 
@@ -91,6 +118,19 @@ let aiWasIncoming = false;
 let audioContext: AudioContext | null = null;
 let bottomPointer: number | null = null;
 let topPointer: number | null = null;
+let lastHitBy: PlayerSide | null = null;
+let bumper: Bumper | null = null;
+let powerNode: PowerUpNode | null = null;
+let powerSpawnTimer = nextPowerSpawnDelay();
+let slowTimer = 0;
+let powerToast: PowerToast | null = null;
+
+const effectTimers: EffectTimers = {
+  topWide: 0,
+  bottomWide: 0,
+  topShrink: 0,
+  bottomShrink: 0,
+};
 
 const keys = new Set<string>();
 const particles: Particle[] = [];
@@ -99,7 +139,7 @@ const trail: TrailPoint[] = [];
 const paddleTop: Paddle = {
   x: WORLD_W / 2 - 82,
   y: 56,
-  width: 164,
+  width: BASE_PADDLE_WIDTH,
   height: 20,
   targetX: WORLD_W / 2,
   vx: 0,
@@ -108,7 +148,7 @@ const paddleTop: Paddle = {
 const paddleBottom: Paddle = {
   x: WORLD_W / 2 - 82,
   y: WORLD_H - 76,
-  width: 164,
+  width: BASE_PADDLE_WIDTH,
   height: 20,
   targetX: WORLD_W / 2,
   vx: 0,
@@ -149,6 +189,8 @@ function resizeCanvas(): void {
 
   if (state === 'playing' || state === 'paused') {
     ball.y *= scaleY;
+    if (bumper) bumper.y *= scaleY;
+    if (powerNode) powerNode.y *= scaleY;
   } else {
     ball.y = WORLD_H / 2;
   }
@@ -187,6 +229,14 @@ function centerPaddles(): void {
   layoutPaddles();
 }
 
+function rescaleBallVelocity(targetSpeed: number): void {
+  const currentSpeed = Math.hypot(ball.vx, ball.vy);
+  if (currentSpeed < .001) return;
+  const scale = targetSpeed / currentSpeed;
+  ball.vx *= scale;
+  ball.vy *= scale;
+}
+
 function resetBall(direction?: 'top' | 'bottom'): void {
   ball.x = WORLD_W / 2;
   ball.y = WORLD_H / 2;
@@ -196,17 +246,126 @@ function resetBall(direction?: 'top' | 'bottom'): void {
   ball.active = false;
   ball.serveTimer = .68;
   trail.length = 0;
+  lastHitBy = null;
 
   const towardTop = direction ? direction === 'top' : Math.random() < .5;
   const angle = (Math.random() * .44 - .22) * Math.PI;
-  ball.vx = Math.sin(angle) * ball.speed;
-  ball.vy = Math.cos(angle) * ball.speed * (towardTop ? -1 : 1);
+  const launchSpeed = ball.speed * (slowTimer > 0 ? SLOW_SCALE : 1);
+  ball.vx = Math.sin(angle) * launchSpeed;
+  ball.vy = Math.cos(angle) * launchSpeed * (towardTop ? -1 : 1);
+}
+
+function resetArenaSystems(): void {
+  effectTimers.topWide = 0;
+  effectTimers.bottomWide = 0;
+  effectTimers.topShrink = 0;
+  effectTimers.bottomShrink = 0;
+  slowTimer = 0;
+  powerToast = null;
+  powerNode = null;
+  powerSpawnTimer = nextPowerSpawnDelay();
+  bumper = createBumper(WORLD_W, WORLD_H);
+  paddleTop.width = BASE_PADDLE_WIDTH;
+  paddleBottom.width = BASE_PADDLE_WIDTH;
+  lastHitBy = null;
+}
+
+function setPaddleWidth(paddle: Paddle, targetWidth: number, dt: number): void {
+  const center = paddle.x + paddle.width / 2;
+  const blend = Math.min(1, dt * 10);
+  paddle.width += (targetWidth - paddle.width) * blend;
+  paddle.x = clamp(center - paddle.width / 2, 22, WORLD_W - 22 - paddle.width);
+  paddle.targetX = clamp(
+    paddle.targetX,
+    22 + paddle.width / 2,
+    WORLD_W - 22 - paddle.width / 2,
+  );
+}
+
+function desiredPaddleWidth(side: PlayerSide): number {
+  const wide = side === 'top' ? effectTimers.topWide : effectTimers.bottomWide;
+  const shrink = side === 'top' ? effectTimers.topShrink : effectTimers.bottomShrink;
+  return BASE_PADDLE_WIDTH * (wide > 0 ? WIDE_SCALE : 1) * (shrink > 0 ? SHRINK_SCALE : 1);
+}
+
+function opponentOf(side: PlayerSide): PlayerSide {
+  return side === 'top' ? 'bottom' : 'top';
+}
+
+function applyPowerUp(type: PowerUpType, collector: PlayerSide): void {
+  if (type === 'wide') {
+    if (collector === 'top') effectTimers.topWide = 6.5;
+    else effectTimers.bottomWide = 6.5;
+    powerToast = { text: 'WIDE', side: collector, life: 1.25 };
+  } else if (type === 'shrink') {
+    const target = opponentOf(collector);
+    if (target === 'top') effectTimers.topShrink = 6.5;
+    else effectTimers.bottomShrink = 6.5;
+    powerToast = { text: 'SHRINK', side: collector, life: 1.25 };
+  } else {
+    if (slowTimer <= 0) rescaleBallVelocity(ball.speed * SLOW_SCALE);
+    slowTimer = 4.5;
+    powerToast = { text: 'SLOW', side: collector, life: 1.25 };
+  }
+
+  const hitX = powerNode?.x ?? ball.x;
+  const hitY = powerNode?.y ?? ball.y;
+  powerNode = null;
+  powerSpawnTimer = nextPowerSpawnDelay();
+  burst(hitX, hitY, 28, 1.15);
+  shake = Math.max(shake, 7);
+  tone(type === 'slow' ? 260 : type === 'wide' ? 670 : 520, .11, 'triangle', .045);
+}
+
+function updateArenaSystems(dt: number): void {
+  effectTimers.topWide = Math.max(0, effectTimers.topWide - dt);
+  effectTimers.bottomWide = Math.max(0, effectTimers.bottomWide - dt);
+  effectTimers.topShrink = Math.max(0, effectTimers.topShrink - dt);
+  effectTimers.bottomShrink = Math.max(0, effectTimers.bottomShrink - dt);
+
+  setPaddleWidth(paddleTop, desiredPaddleWidth('top'), dt);
+  setPaddleWidth(paddleBottom, desiredPaddleWidth('bottom'), dt);
+
+  if (slowTimer > 0) {
+    slowTimer = Math.max(0, slowTimer - dt);
+    if (slowTimer === 0 && ball.active) rescaleBallVelocity(ball.speed);
+  }
+
+  if (powerToast) {
+    powerToast.life -= dt;
+    if (powerToast.life <= 0) powerToast = null;
+  }
+
+  if (powerNode) {
+    powerNode.life -= dt;
+    powerNode.phase += dt * 4;
+    if (powerNode.life <= 0) {
+      powerNode = null;
+      powerSpawnTimer = nextPowerSpawnDelay();
+    }
+  } else {
+    powerSpawnTimer -= dt;
+    if (powerSpawnTimer <= 0) {
+      if (!lastHitBy) {
+        powerSpawnTimer = .75;
+      } else {
+        powerNode = createPowerUpNode({
+          worldWidth: WORLD_W,
+          worldHeight: WORLD_H,
+          ball,
+          bumper,
+        });
+        powerSpawnTimer = powerNode ? 0 : 1.2;
+      }
+    }
+  }
 }
 
 function startMatch(): void {
   unlockAudio();
   topScore = 0;
   bottomScore = 0;
+  resetArenaSystems();
   syncHud();
   centerPaddles();
   resetBall();
@@ -221,6 +380,8 @@ function showMenu(): void {
   state = 'menu';
   topScore = 0;
   bottomScore = 0;
+  resetArenaSystems();
+  bumper = null;
   syncHud();
   centerPaddles();
   resetBall();
@@ -370,11 +531,13 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
   const maxAngle = 62 * Math.PI / 180;
   const angle = offset * maxAngle;
 
+  lastHitBy = fromTop ? 'bottom' : 'top';
   ball.speed = Math.min(ball.speed * 1.035 + 7, 1030);
-  const maxHorizontal = Math.sin(maxAngle) * ball.speed;
-  const influencedVx = Math.sin(angle) * ball.speed + paddle.vx * .15;
+  const effectiveSpeed = ball.speed * (slowTimer > 0 ? SLOW_SCALE : 1);
+  const maxHorizontal = Math.sin(maxAngle) * effectiveSpeed;
+  const influencedVx = Math.sin(angle) * effectiveSpeed + paddle.vx * .15;
   ball.vx = clamp(influencedVx, -maxHorizontal, maxHorizontal);
-  const verticalSpeed = Math.sqrt(Math.max(0, ball.speed * ball.speed - ball.vx * ball.vx));
+  const verticalSpeed = Math.sqrt(Math.max(0, effectiveSpeed * effectiveSpeed - ball.vx * ball.vx));
   ball.vy = verticalSpeed * (fromTop ? -1 : 1);
   ball.y = fromTop
     ? paddle.y - ball.radius - .5
@@ -383,6 +546,39 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
   shake = Math.min(8, 3 + ball.speed / 230);
   burst(ball.x, ball.y, 12, .8);
   tone(220 + Math.abs(offset) * 220 + ball.speed * .18, .045, 'square', .025);
+  return true;
+}
+
+function bumperCollision(): boolean {
+  if (!bumper) return false;
+
+  const dx = ball.x - bumper.x;
+  const dy = ball.y - bumper.y;
+  const minDistance = ball.radius + bumper.radius;
+  const distanceSquared = dx * dx + dy * dy;
+  if (distanceSquared > minDistance * minDistance) return false;
+
+  const distance = Math.sqrt(Math.max(distanceSquared, .0001));
+  const nx = dx / distance;
+  const ny = dy / distance;
+  const approach = ball.vx * nx + ball.vy * ny;
+  if (approach >= 0) return false;
+
+  ball.x = bumper.x + nx * (minDistance + .5);
+  ball.y = bumper.y + ny * (minDistance + .5);
+  ball.vx -= 2 * approach * nx;
+  ball.vy -= 2 * approach * ny;
+
+  shake = Math.max(shake, 5);
+  burst(ball.x, ball.y, 10, .65);
+  tone(185, .04, 'square', .02);
+  return true;
+}
+
+function powerUpCollision(): boolean {
+  if (!powerNode || !lastHitBy) return false;
+  if (!circlesOverlap(ball, ball.radius, powerNode, powerNode.radius)) return false;
+  applyPowerUp(powerNode.type, lastHitBy);
   return true;
 }
 
@@ -413,6 +609,9 @@ function updateBall(dt: number): void {
       ball.vx = -Math.abs(ball.vx);
       tone(150, .025, 'sine', .012);
     }
+
+    bumperCollision();
+    powerUpCollision();
 
     if (ball.vy > 0) paddleCollision(paddleBottom, true);
     else paddleCollision(paddleTop, false);
@@ -453,6 +652,7 @@ function updateEffects(dt: number): void {
 
 function update(dt: number): void {
   if (state !== 'playing') return;
+  updateArenaSystems(dt);
   updateHumanControls(dt);
   if (mode === 'cpu') updateAI(dt);
   updateBall(dt);
@@ -499,6 +699,109 @@ function drawArena(): void {
   ctx.stroke();
 }
 
+function powerColor(type: PowerUpType): string {
+  if (type === 'wide') return '104, 236, 255';
+  if (type === 'shrink') return '255, 118, 183';
+  return '255, 207, 104';
+}
+
+function powerGlyph(type: PowerUpType): string {
+  if (type === 'wide') return 'W';
+  if (type === 'shrink') return '−';
+  return 'S';
+}
+
+function drawBumper(): void {
+  if (!bumper) return;
+
+  ctx.save();
+  const gradient = ctx.createRadialGradient(
+    bumper.x - 8,
+    bumper.y - 9,
+    3,
+    bumper.x,
+    bumper.y,
+    bumper.radius,
+  );
+  gradient.addColorStop(0, 'rgba(113, 145, 157, .48)');
+  gradient.addColorStop(1, 'rgba(20, 33, 40, .94)');
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = 'rgba(190, 218, 226, .28)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(218, 238, 243, .16)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 8; i += 1) {
+    const angle = i * Math.PI / 4;
+    const inner = bumper.radius - 8;
+    ctx.beginPath();
+    ctx.moveTo(
+      bumper.x + Math.cos(angle) * inner,
+      bumper.y + Math.sin(angle) * inner,
+    );
+    ctx.lineTo(
+      bumper.x + Math.cos(angle) * (bumper.radius - 3),
+      bumper.y + Math.sin(angle) * (bumper.radius - 3),
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPowerNode(): void {
+  if (!powerNode) return;
+
+  const pulse = .5 + .5 * Math.sin(powerNode.phase);
+  const alpha = clamp(powerNode.life / .65, 0, 1);
+  const color = powerColor(powerNode.type);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowBlur = 22 + pulse * 12;
+  ctx.shadowColor = `rgba(${color}, .72)`;
+  ctx.fillStyle = `rgba(${color}, .16)`;
+  ctx.strokeStyle = `rgba(${color}, .9)`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(powerNode.x, powerNode.y, powerNode.radius + pulse * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = `rgba(${color}, .95)`;
+  ctx.beginPath();
+  ctx.arc(powerNode.x, powerNode.y, 14, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#061019';
+  ctx.font = '900 15px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(powerGlyph(powerNode.type), powerNode.x, powerNode.y + .5);
+  ctx.restore();
+}
+
+function drawPowerToast(): void {
+  if (!powerToast) return;
+
+  const y = powerToast.side === 'top' ? paddleTop.y + 58 : paddleBottom.y - 38;
+  const alpha = clamp(powerToast.life / .35, 0, 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = '800 13px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = powerToast.side === 'bottom'
+    ? 'rgba(105, 236, 255, .9)'
+    : 'rgba(190, 255, 112, .9)';
+  ctx.fillText(powerToast.text, WORLD_W / 2, y);
+  ctx.restore();
+}
+
 function drawPaddle(paddle: Paddle, isBottom: boolean): void {
   const alpha = state === 'menu' ? .72 : 1;
   const color = isBottom ? '105, 236, 255' : mode === 'cpu' ? '190, 255, 112' : '255, 171, 100';
@@ -522,7 +825,7 @@ function drawBall(): void {
   for (let i = trail.length - 1; i >= 0; i -= 1) {
     const point = trail[i];
     ctx.globalAlpha = Math.max(0, point.life) * .25;
-    ctx.fillStyle = '#83f1ff';
+    ctx.fillStyle = slowTimer > 0 ? '#ffd070' : '#83f1ff';
     ctx.beginPath();
     ctx.arc(point.x, point.y, ball.radius * (.35 + point.life * .5), 0, Math.PI * 2);
     ctx.fill();
@@ -531,8 +834,8 @@ function drawBall(): void {
   ctx.globalAlpha = 1;
   ctx.save();
   ctx.shadowBlur = 30;
-  ctx.shadowColor = 'rgba(120, 239, 255, .75)';
-  ctx.fillStyle = '#f5fdff';
+  ctx.shadowColor = slowTimer > 0 ? 'rgba(255, 207, 104, .72)' : 'rgba(120, 239, 255, .75)';
+  ctx.fillStyle = slowTimer > 0 ? '#fff2c9' : '#f5fdff';
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
   ctx.fill();
@@ -569,10 +872,13 @@ function draw(): void {
   }
 
   drawArena();
+  drawBumper();
+  drawPowerNode();
   drawParticles();
   drawPaddle(paddleTop, false);
   drawPaddle(paddleBottom, true);
   drawBall();
+  drawPowerToast();
 
   ctx.restore();
 }
@@ -763,6 +1069,8 @@ soundButton.addEventListener('click', () => {
 });
 
 resizeCanvas();
+resetArenaSystems();
+bumper = null;
 centerPaddles();
 resetBall('top');
 syncHud();
