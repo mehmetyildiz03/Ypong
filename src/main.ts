@@ -128,7 +128,6 @@ let powerSpawnTimer = nextPowerSpawnDelay();
 let boostHitsRemaining = 0;
 let boostedFlight = false;
 let perfectFlight = false;
-let perfectToast: PowerToast | null = null;
 let powerToast: PowerToast | null = null;
 
 const effectTimers: EffectTimers = {
@@ -246,7 +245,6 @@ function rescaleBallVelocity(targetSpeed: number): void {
 function resetBall(direction?: 'top' | 'bottom'): void {
   if (boostHitsRemaining === 0) boostedFlight = false;
   perfectFlight = false;
-  perfectToast = null;
 
   ball.x = WORLD_W / 2;
   ball.y = WORLD_H / 2;
@@ -339,11 +337,6 @@ function updateArenaSystems(dt: number): void {
 
   setPaddleWidth(paddleTop, desiredPaddleWidth('top'), dt);
   setPaddleWidth(paddleBottom, desiredPaddleWidth('bottom'), dt);
-
-  if (perfectToast) {
-    perfectToast.life -= dt;
-    if (perfectToast.life <= 0) perfectToast = null;
-  }
 
   if (powerToast) {
     powerToast.life -= dt;
@@ -562,8 +555,6 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
 
   perfectFlight = isPerfect;
   if (isPerfect) {
-    const side: PlayerSide = fromTop ? 'bottom' : 'top';
-    perfectToast = { text: 'PERFECT', side, life: .85 };
     shake = Math.max(shake, 6);
     burst(ball.x, ball.y, 18, .9);
     tone(980, .055, 'triangle', .035);
@@ -853,24 +844,6 @@ function drawBoostCounter(): void {
   ctx.restore();
 }
 
-function drawPerfectToast(): void {
-  if (!perfectToast) return;
-
-  const y = perfectToast.side === 'top' ? paddleTop.y + 70 : paddleBottom.y - 50;
-  const alpha = clamp(perfectToast.life / .22, 0, 1);
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.font = '950 14px ui-sans-serif, system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(238, 253, 255, .96)';
-  ctx.shadowBlur = 18;
-  ctx.shadowColor = 'rgba(112, 238, 255, .72)';
-  ctx.fillText(perfectToast.text, WORLD_W / 2, y);
-  ctx.restore();
-}
-
 function drawPowerToast(): void {
   if (!powerToast) return;
 
@@ -980,7 +953,6 @@ function draw(): void {
   drawPaddle(paddleBottom, true);
   drawBall();
   drawBoostCounter();
-  drawPerfectToast();
   drawPowerToast();
 
   ctx.restore();
