@@ -44,8 +44,7 @@ button {
 .game-stage {
   position: relative;
   width: min(100%, 720px);
-  max-height: calc(100dvh - 20px);
-  aspect-ratio: 2 / 3;
+  height: min(calc(100dvh - 20px), 1080px);
   overflow: hidden;
   border-radius: clamp(18px, 4vw, 32px);
   border: 1px solid rgba(177, 231, 255, 0.13);
@@ -65,23 +64,64 @@ button {
   position: absolute;
   inset: 16px 16px auto 16px;
   z-index: 4;
-  display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
-  align-items: center;
-  gap: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   pointer-events: none;
 }
 
-.score {
-  font-size: clamp(24px, 5vw, 38px);
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.05em;
-  text-shadow: 0 0 24px rgba(99, 226, 255, 0.25);
+.matchup {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(4, 14, 21, 0.62);
+  backdrop-filter: blur(12px);
 }
 
-.score-top { justify-self: start; }
-.score-bottom { justify-self: end; }
+.score-side {
+  min-width: 48px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.score-side-bottom {
+  justify-content: flex-end;
+}
+
+.score-label {
+  color: rgba(220, 242, 249, .58);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+
+.score-value {
+  color: #effbff;
+  font-size: clamp(21px, 5vw, 31px);
+  line-height: 1;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.06em;
+  text-shadow: 0 0 24px rgba(99, 226, 255, .25);
+}
+
+.score-divider {
+  color: rgba(220, 242, 249, .28);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.hud-actions {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
 
 .icon-button {
   pointer-events: auto;
@@ -248,7 +288,7 @@ h2 {
 @media (orientation: landscape) and (max-height: 560px) {
   .game-stage {
     height: calc(100dvh - 16px);
-    width: auto;
+    width: min(100%, calc((100dvh - 16px) * .78));
   }
 
   .rotate-note { display: block; }
@@ -259,7 +299,8 @@ h2 {
 
   .game-stage {
     width: 100%;
-    max-height: 100dvh;
+    height: 100dvh;
+    max-height: none;
     border: 0;
     border-radius: 0;
     box-shadow: none;
