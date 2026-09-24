@@ -328,7 +328,7 @@ function updateArenaSystems(dt: number): void {
 
   if (slowTimer > 0) {
     slowTimer = Math.max(0, slowTimer - dt);
-    if (slowTimer === 0 && ball.active) rescaleBallVelocity(ball.speed);
+    if (slowTimer === 0) rescaleBallVelocity(ball.speed);
   }
 
   if (powerToast) {
@@ -558,9 +558,19 @@ function bumperCollision(): boolean {
   const distanceSquared = dx * dx + dy * dy;
   if (distanceSquared > minDistance * minDistance) return false;
 
-  const distance = Math.sqrt(Math.max(distanceSquared, .0001));
-  const nx = dx / distance;
-  const ny = dy / distance;
+  const distance = Math.sqrt(distanceSquared);
+  let nx: number;
+  let ny: number;
+
+  if (distance < .001) {
+    const speed = Math.max(Math.hypot(ball.vx, ball.vy), 1);
+    nx = -ball.vx / speed;
+    ny = -ball.vy / speed;
+  } else {
+    nx = dx / distance;
+    ny = dy / distance;
+  }
+
   const approach = ball.vx * nx + ball.vy * ny;
   if (approach >= 0) return false;
 
@@ -782,6 +792,11 @@ function drawPowerNode(): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(powerGlyph(powerNode.type), powerNode.x, powerNode.y + .5);
+
+  ctx.fillStyle = `rgba(${color}, .82)`;
+  ctx.font = '800 9px ui-sans-serif, system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(powerNode.type.toUpperCase(), powerNode.x, powerNode.y + powerNode.radius + 9);
   ctx.restore();
 }
 
