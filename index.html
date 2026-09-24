@@ -15,10 +15,21 @@
         <canvas id="game" width="720" height="1080" aria-label="YPONG oyun alanı"></canvas>
 
         <header class="hud" aria-live="polite">
-          <div class="score score-top"><span id="topScore">0</span></div>
-          <button id="pauseButton" class="icon-button" type="button" aria-label="Oyunu duraklat">Ⅱ</button>
-          <button id="soundButton" class="icon-button" type="button" aria-label="Sesi kapat">♪</button>
-          <div class="score score-bottom"><span id="bottomScore">0</span></div>
+          <div class="matchup" aria-label="Skor">
+            <div class="score-side">
+              <span id="topLabel" class="score-label">CPU</span>
+              <strong id="topScore" class="score-value">0</strong>
+            </div>
+            <span class="score-divider" aria-hidden="true">:</span>
+            <div class="score-side score-side-bottom">
+              <strong id="bottomScore" class="score-value">0</strong>
+              <span id="bottomLabel" class="score-label">SEN</span>
+            </div>
+          </div>
+          <div class="hud-actions">
+            <button id="pauseButton" class="icon-button" type="button" aria-label="Oyunu duraklat">Ⅱ</button>
+            <button id="soundButton" class="icon-button" type="button" aria-label="Sesi kapat">♪</button>
+          </div>
         </header>
 
         <div id="menu" class="overlay overlay-visible">
