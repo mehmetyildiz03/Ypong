@@ -17,7 +17,7 @@ const FIXED_STEP = 1 / 120;
 const BASE_PADDLE_WIDTH = 164;
 const WIDE_SCALE = 1.35;
 const SHRINK_SCALE = .7;
-const SLOW_SCALE = .72;
+const BOOST_SCALE = 1.28;
 
 type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
 type Mode = 'cpu' | 'local';
@@ -122,7 +122,8 @@ let lastHitBy: PlayerSide | null = null;
 let bumper: Bumper | null = null;
 let powerNode: PowerUpNode | null = null;
 let powerSpawnTimer = nextPowerSpawnDelay();
-let slowTimer = 0;
+let boostHitsRemaining = 0;
+let boostedFlight = false;
 let powerToast: PowerToast | null = null;
 
 const effectTimers: EffectTimers = {
@@ -250,7 +251,7 @@ function resetBall(direction?: 'top' | 'bottom'): void {
 
   const towardTop = direction ? direction === 'top' : Math.random() < .5;
   const angle = (Math.random() * .44 - .22) * Math.PI;
-  const launchSpeed = ball.speed * (slowTimer > 0 ? SLOW_SCALE : 1);
+  const launchSpeed = ball.speed * (boostedFlight ? BOOST_SCALE : 1);
   ball.vx = Math.sin(angle) * launchSpeed;
   ball.vy = Math.cos(angle) * launchSpeed * (towardTop ? -1 : 1);
 }
@@ -260,7 +261,8 @@ function resetArenaSystems(): void {
   effectTimers.bottomWide = 0;
   effectTimers.topShrink = 0;
   effectTimers.bottomShrink = 0;
-  slowTimer = 0;
+  boostHitsRemaining = 0;
+  boostedFlight = false;
   powerToast = null;
   powerNode = null;
   powerSpawnTimer = nextPowerSpawnDelay();
@@ -303,9 +305,10 @@ function applyPowerUp(type: PowerUpType, collector: PlayerSide): void {
     else effectTimers.bottomShrink = 6.5;
     powerToast = { text: 'SHRINK', side: collector, life: 1.25 };
   } else {
-    if (slowTimer <= 0) rescaleBallVelocity(ball.speed * SLOW_SCALE);
-    slowTimer = 4.5;
-    powerToast = { text: 'SLOW', side: collector, life: 1.25 };
+    boostHitsRemaining = 3;
+    boostedFlight = true;
+    rescaleBallVelocity(ball.speed * BOOST_SCALE);
+    powerToast = { text: 'BOOST ×3', side: collector, life: 1.25 };
   }
 
   const hitX = powerNode?.x ?? ball.x;
@@ -314,7 +317,7 @@ function applyPowerUp(type: PowerUpType, collector: PlayerSide): void {
   powerSpawnTimer = nextPowerSpawnDelay();
   burst(hitX, hitY, 28, 1.15);
   shake = Math.max(shake, 7);
-  tone(type === 'slow' ? 260 : type === 'wide' ? 670 : 520, .11, 'triangle', .045);
+  tone(type === 'boost' ? 820 : type === 'wide' ? 670 : 520, .11, 'triangle', .045);
 }
 
 function updateArenaSystems(dt: number): void {
@@ -325,11 +328,6 @@ function updateArenaSystems(dt: number): void {
 
   setPaddleWidth(paddleTop, desiredPaddleWidth('top'), dt);
   setPaddleWidth(paddleBottom, desiredPaddleWidth('bottom'), dt);
-
-  if (slowTimer > 0) {
-    slowTimer = Math.max(0, slowTimer - dt);
-    if (slowTimer === 0) rescaleBallVelocity(ball.speed);
-  }
 
   if (powerToast) {
     powerToast.life -= dt;
@@ -533,12 +531,21 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
 
   lastHitBy = fromTop ? 'bottom' : 'top';
   ball.speed = Math.min(ball.speed * 1.035 + 7, 1030);
-  const effectiveSpeed = ball.speed * (slowTimer > 0 ? SLOW_SCALE : 1);
+
+  const useBoost = boostHitsRemaining > 0;
+  const effectiveSpeed = ball.speed * (useBoost ? BOOST_SCALE : 1);
   const maxHorizontal = Math.sin(maxAngle) * effectiveSpeed;
   const influencedVx = Math.sin(angle) * effectiveSpeed + paddle.vx * .15;
   ball.vx = clamp(influencedVx, -maxHorizontal, maxHorizontal);
   const verticalSpeed = Math.sqrt(Math.max(0, effectiveSpeed * effectiveSpeed - ball.vx * ball.vx));
   ball.vy = verticalSpeed * (fromTop ? -1 : 1);
+
+  if (useBoost) {
+    boostHitsRemaining -= 1;
+    boostedFlight = true;
+  } else if (boostedFlight) {
+    boostedFlight = false;
+  }
   ball.y = fromTop
     ? paddle.y - ball.radius - .5
     : paddle.y + paddle.height + ball.radius + .5;
@@ -712,13 +719,13 @@ function drawArena(): void {
 function powerColor(type: PowerUpType): string {
   if (type === 'wide') return '104, 236, 255';
   if (type === 'shrink') return '255, 118, 183';
-  return '255, 207, 104';
+  return '255, 151, 72';
 }
 
 function powerGlyph(type: PowerUpType): string {
   if (type === 'wide') return 'W';
   if (type === 'shrink') return '−';
-  return 'S';
+  return 'B';
 }
 
 function drawBumper(): void {
@@ -840,7 +847,7 @@ function drawBall(): void {
   for (let i = trail.length - 1; i >= 0; i -= 1) {
     const point = trail[i];
     ctx.globalAlpha = Math.max(0, point.life) * .25;
-    ctx.fillStyle = slowTimer > 0 ? '#ffd070' : '#83f1ff';
+    ctx.fillStyle = boostedFlight ? '#ff9852' : '#83f1ff';
     ctx.beginPath();
     ctx.arc(point.x, point.y, ball.radius * (.35 + point.life * .5), 0, Math.PI * 2);
     ctx.fill();
@@ -849,8 +856,8 @@ function drawBall(): void {
   ctx.globalAlpha = 1;
   ctx.save();
   ctx.shadowBlur = 30;
-  ctx.shadowColor = slowTimer > 0 ? 'rgba(255, 207, 104, .72)' : 'rgba(120, 239, 255, .75)';
-  ctx.fillStyle = slowTimer > 0 ? '#fff2c9' : '#f5fdff';
+  ctx.shadowColor = boostedFlight ? 'rgba(255, 120, 56, .78)' : 'rgba(120, 239, 255, .75)';
+  ctx.fillStyle = boostedFlight ? '#fff0e3' : '#f5fdff';
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
   ctx.fill();
