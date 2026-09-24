@@ -18,7 +18,7 @@ const BASE_PADDLE_WIDTH = 164;
 const WIDE_SCALE = 1.35;
 const SHRINK_SCALE = .7;
 const BOOST_SCALE = 1.28;
-const PERFECT_ZONE_RATIO = .18;
+const PERFECT_ZONE_WIDTH = 30;
 const PERFECT_SPEED_SCALE = 1.06;
 const PERFECT_STEER_ANGLE = 14 * Math.PI / 180;
 
@@ -271,7 +271,6 @@ function resetArenaSystems(): void {
   boostHitsRemaining = 0;
   boostedFlight = false;
   perfectFlight = false;
-  perfectToast = null;
   powerToast = null;
   powerNode = null;
   powerSpawnTimer = nextPowerSpawnDelay();
@@ -536,7 +535,7 @@ function paddleCollision(paddle: Paddle, fromTop: boolean): boolean {
   const paddleCenter = paddle.x + paddle.width / 2;
   const offset = clamp((ball.x - paddleCenter) / (paddle.width / 2), -1, 1);
   const maxAngle = 62 * Math.PI / 180;
-  const isPerfect = Math.abs(offset) <= PERFECT_ZONE_RATIO;
+  const isPerfect = Math.abs(ball.x - paddleCenter) <= PERFECT_ZONE_WIDTH / 2;
   const steer = clamp(paddle.vx / 1800, -1, 1);
   const angle = isPerfect ? steer * PERFECT_STEER_ANGLE : offset * maxAngle;
 
@@ -878,16 +877,27 @@ function drawPaddle(paddle: Paddle, isBottom: boolean): void {
   roundedRect(paddle.x + 14, paddle.y + 4, paddle.width - 28, 3, 2);
   ctx.fill();
 
-  const sweetWidth = paddle.width * PERFECT_ZONE_RATIO;
-  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  const sweetWidth = Math.min(PERFECT_ZONE_WIDTH, paddle.width - 12);
+  const sweetX = paddle.x + paddle.width / 2 - sweetWidth / 2;
+
+  ctx.fillStyle = 'rgba(255,255,255,.16)';
   roundedRect(
-    paddle.x + paddle.width / 2 - sweetWidth / 2,
-    paddle.y - 3,
+    sweetX,
+    paddle.y - 2,
     sweetWidth,
-    paddle.height + 6,
-    8,
+    paddle.height + 4,
+    7,
   );
   ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,.34)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(sweetX, paddle.y + 4);
+  ctx.lineTo(sweetX, paddle.y + paddle.height - 4);
+  ctx.moveTo(sweetX + sweetWidth, paddle.y + 4);
+  ctx.lineTo(sweetX + sweetWidth, paddle.y + paddle.height - 4);
+  ctx.stroke();
   ctx.restore();
 }
 
